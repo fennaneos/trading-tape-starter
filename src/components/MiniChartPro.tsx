@@ -1,10 +1,11 @@
 // src/components/MiniChartPro.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-/* ---------- types & helpers ---------- */
+/* ---------- types ---------- */
 type Candle = { t: number; o: number; h: number; l: number; c: number; v: number };
 type ChartMode = 'candles' | 'line' | 'both';
 
+/* ---------- math helpers ---------- */
 function ema(values: number[], period: number) {
   if (!values.length || period <= 1) return values.slice();
   const k = 2 / (period + 1);
@@ -63,7 +64,9 @@ function rsi(values: number[], period = 14) {
   return out;
 }
 function macd(values: number[], fast = 12, slow = 26, signal = 9) {
-  const macdLine = ema(values, fast).map((v, i) => v - ema(values, slow)[i]);
+  const eFast = ema(values, fast);
+  const eSlow = ema(values, slow);
+  const macdLine = eFast.map((v, i) => v - eSlow[i]);
   const signalLine = ema(macdLine, signal);
   const hist = macdLine.map((v, i) => v - signalLine[i]);
   return { macdLine, signalLine, hist };
@@ -92,6 +95,11 @@ function formatTime(tsSec: number) {
   const mm = String(d.getMinutes()).padStart(2, '0');
   return `${hh}:${mm}`;
 }
+function fmt(n: number, p = 5) {
+  if (!isFinite(n)) return '-';
+  const s = n.toFixed(p);
+  return s.replace(/0+$/, '').replace(/\.$/, '');
+}
 
 /* ---------- component ---------- */
 export default function MiniChartPro({
@@ -115,18 +123,13 @@ export default function MiniChartPro({
 }: {
   symbol: string;
   tf?: string;
-  width?: number;
-  height?: number;
+  width?: number; height?: number;
   mode?: ChartMode;
   showVolume?: boolean;
-  emaFast?: number;
-  emaSlow?: number;
-  rsiPane?: boolean;
-  rsiPeriod?: number;
+  emaFast?: number; emaSlow?: number;
+  rsiPane?: boolean; rsiPeriod?: number;
   macdPane?: boolean;
-  showBB?: boolean;
-  bbPeriod?: number;
-  bbK?: number;
+  showBB?: boolean; bbPeriod?: number; bbK?: number;
   crosshair?: boolean;
   annotations?: { level: number; type: 'support' | 'resistance' }[];
   signals?: any[];
@@ -139,7 +142,7 @@ export default function MiniChartPro({
 
   const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:4000';
 
-  // fetch candles
+  /* fetch candles */
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -161,7 +164,7 @@ export default function MiniChartPro({
     return () => { alive = false; };
   }, [symbol, tf, API_BASE]);
 
-  // resize observer
+  /* observe size */
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -173,7 +176,7 @@ export default function MiniChartPro({
     return () => ro.disconnect();
   }, [width, height]);
 
-  // precompute metrics & indicators
+  /* indicators & ranges */
   const metrics = useMemo(() => {
     const closes = data.map(d => d.c);
     const highs = data.map(d => d.h);
@@ -192,11 +195,10 @@ export default function MiniChartPro({
     return { closes, max, min, volMax, emaF, emaS, bb, rsiArr, macdObj };
   }, [data, emaFast, emaSlow, showBB, bbPeriod, bbK, rsiPane, rsiPeriod, macdPane]);
 
-  // main draw on base canvas
+  /* draw base (price, volume, panes) */
   useEffect(() => {
     const base = baseRef.current;
-    const wrap = wrapRef.current;
-    if (!base || !wrap) return;
+    if (!base) return;
 
     const w = (base.width = (containerSize.w || width));
     const h = (base.height = (containerSize.h || height));
@@ -207,9 +209,9 @@ export default function MiniChartPro({
 
     if (!data.length) return;
 
-    // layout
+    // panes layout
     const extraPaneCount = (rsiPane ? 1 : 0) + (macdPane ? 1 : 0);
-    const paneH = 88; // each indicator pane height
+    const paneH = 88;
     const extraH = extraPaneCount * (paneH + 10);
     const pad = { l: 48, r: 12, t: 10, b: (showVolume ? 90 : 40) + extraH };
 
@@ -226,33 +228,26 @@ export default function MiniChartPro({
     ctx.lineWidth = 1;
     for (let g = 0; g <= 5; g++) {
       const yy = pad.t + (plotH / 5) * g;
-      ctx.beginPath();
-      ctx.moveTo(pad.l, yy);
-      ctx.lineTo(w - pad.r, yy);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(w - pad.r, yy); ctx.stroke();
     }
 
-    // Bollinger fill first (under price)
+    // BB fill
     if (bb) {
       ctx.fillStyle = 'rgba(255, 215, 0, .07)';
       ctx.beginPath();
       let started = false;
       for (let i = 0; i < data.length; i++) {
-        const u = bb.upper[i];
-        if (isNaN(u)) continue;
+        const u = bb.upper[i]; if (isNaN(u)) continue;
         const x = xAt(i), y = yAt(u);
         if (!started) { ctx.moveTo(x, y); started = true; }
         else ctx.lineTo(x, y);
       }
-      // lower back
       for (let i = data.length - 1; i >= 0; i--) {
-        const l = bb.lower[i];
-        if (isNaN(l)) continue;
+        const l = bb.lower[i]; if (isNaN(l)) continue;
         const x = xAt(i), y = yAt(l);
         ctx.lineTo(x, y);
       }
-      ctx.closePath();
-      ctx.fill();
+      ctx.closePath(); ctx.fill();
     }
 
     // candles
@@ -264,10 +259,7 @@ export default function MiniChartPro({
         const up = d.c >= d.o;
         ctx.strokeStyle = up ? '#2ecc71' : '#e74c3c';
         ctx.fillStyle = up ? 'rgba(46,204,113,.8)' : 'rgba(231,76,60,.8)';
-        // wick
-        ctx.beginPath();
-        ctx.moveTo(x, yH); ctx.lineTo(x, yL); ctx.stroke();
-        // body
+        ctx.beginPath(); ctx.moveTo(x, yH); ctx.lineTo(x, yL); ctx.stroke();
         const bx = x - cw / 2;
         const by = Math.min(yO, yC);
         const bh = Math.max(2, Math.abs(yC - yO));
@@ -275,22 +267,19 @@ export default function MiniChartPro({
       });
     }
 
-    // line (close)
+    // close line
     if (mode !== 'candles') {
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
       ctx.beginPath();
       closes.forEach((c, i) => {
         const x = xAt(i), y = yAt(c);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       });
       ctx.stroke();
     }
 
     // EMAs
-    ctx.strokeStyle = '#4dc9ff';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#4dc9ff'; ctx.lineWidth = 1.2;
     ctx.beginPath();
     emaF.forEach((c, i) => {
       const x = xAt(i), y = yAt(c);
@@ -308,29 +297,17 @@ export default function MiniChartPro({
 
     // BB lines
     if (bb) {
-      ctx.strokeStyle = 'rgba(255,215,0,.65)';
-      ctx.lineWidth = 1;
-      // upper
+      ctx.strokeStyle = 'rgba(255,215,0,.65)'; ctx.lineWidth = 1;
       ctx.beginPath();
-      bb.upper.forEach((v, i) => {
-        if (isNaN(v)) return;
-        const x = xAt(i), y = yAt(v);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
+      bb.upper.forEach((v, i) => { if (isNaN(v)) return; const x = xAt(i), y = yAt(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
-      // lower
       ctx.beginPath();
-      bb.lower.forEach((v, i) => {
-        if (isNaN(v)) return;
-        const x = xAt(i), y = yAt(v);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
+      bb.lower.forEach((v, i) => { if (isNaN(v)) return; const x = xAt(i), y = yAt(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
     }
 
-    // annotations (support/resistance dashed)
-    ctx.setLineDash([6, 6]);
-    ctx.lineWidth = 1;
+    // annotations
+    ctx.setLineDash([6, 6]); ctx.lineWidth = 1;
     annotations.forEach(a => {
       ctx.strokeStyle = a.type === 'support' ? 'rgba(46,204,113,.7)' : 'rgba(255,206,86,.85)';
       const yy = yAt(a.level);
@@ -356,125 +333,86 @@ export default function MiniChartPro({
     let paneTop = h - (extraPaneCount * (paneH + 10)) + 10;
     if (rsiPane && metrics.rsiArr) {
       const yR = (val: number) => {
-        const top = paneTop, bottom = paneTop + paneH;
-        const rng = 100 - 0;
-        return top + ((100 - val) * (paneH / rng));
+        const top = paneTop;
+        return top + ((100 - val) * (paneH / 100));
       };
-      // box
       ctx.strokeStyle = 'rgba(255,255,255,.08)';
       ctx.strokeRect(pad.l, paneTop, plotW, paneH);
-      // guides
       ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,255,255,.15)';
-      [30, 50, 70].forEach(level => {
-        const y = yR(level);
-        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
-      });
+      [30, 50, 70].forEach(level => { const y = yR(level); ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke(); });
       ctx.setLineDash([]);
-
-      // line
-      ctx.strokeStyle = '#a855f7';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 1.2;
       ctx.beginPath();
-      metrics.rsiArr.forEach((v, i) => {
-        if (isNaN(v)) return;
-        const x = xAt(i), y = yR(v);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
+      metrics.rsiArr.forEach((v, i) => { if (isNaN(v)) return; const x = xAt(i), y = yR(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
-
       paneTop += paneH + 10;
     }
 
     // MACD pane
     if (macdPane && metrics.macdObj) {
       const { macdObj } = metrics;
-      const vals = [...macdObj.macdLine, ...macdObj.signalLine, ...macdObj.hist];
-      const mMax = Math.max(...vals.filter(v => isFinite(v))) || 1;
-      const mMin = Math.min(...vals.filter(v => isFinite(v))) || -1;
-      const yM = (val: number) => {
-        const top = paneTop, bottom = paneTop + paneH;
-        return top + ((mMax - val) * (paneH / (mMax - mMin + 1e-9)));
-      };
+      const vals = [...macdObj.macdLine, ...macdObj.signalLine, ...macdObj.hist].filter(v => isFinite(v));
+      const mMax = (vals.length ? Math.max(...vals) : 1);
+      const mMin = (vals.length ? Math.min(...vals) : -1);
+      const yM = (val: number) => paneTop + ((mMax - val) * (paneH / (mMax - mMin + 1e-9)));
 
-      // box
-      ctx.strokeStyle = 'rgba(255,255,255,.08)';
-      ctx.strokeRect(pad.l, paneTop, plotW, paneH);
-      // zero line
+      ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.strokeRect(pad.l, paneTop, plotW, paneH);
       const y0 = yM(0);
-      ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,255,255,.15)';
-      ctx.beginPath(); ctx.moveTo(pad.l, y0); ctx.lineTo(w - pad.r, y0); ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.beginPath(); ctx.moveTo(pad.l, y0); ctx.lineTo(w - pad.r, y0); ctx.stroke(); ctx.setLineDash([]);
 
-      // histogram
       const barW = Math.max(1, (plotW / data.length) * 0.7);
-      metrics.macdObj.hist.forEach((v, i) => {
+      macdObj.hist.forEach((v, i) => {
         if (!isFinite(v)) return;
-        const x = xAt(i);
-        const y = yM(v);
+        const x = xAt(i), y = yM(v);
         ctx.fillStyle = v >= 0 ? 'rgba(46,204,113,.6)' : 'rgba(231,76,60,.6)';
         ctx.fillRect(x - barW / 2, Math.min(y0, y), barW, Math.abs(y - y0));
       });
 
-      // macd + signal
       ctx.strokeStyle = '#4dc9ff'; ctx.lineWidth = 1.3;
       ctx.beginPath();
-      metrics.macdObj.macdLine.forEach((v, i) => {
-        if (!isFinite(v)) return;
-        const x = xAt(i), y = yM(v);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
+      macdObj.macdLine.forEach((v, i) => { if (!isFinite(v)) return; const x = xAt(i), y = yM(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
 
       ctx.strokeStyle = '#ffa14d';
       ctx.beginPath();
-      metrics.macdObj.signalLine.forEach((v, i) => {
-        if (!isFinite(v)) return;
-        const x = xAt(i), y = yM(v);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
+      macdObj.signalLine.forEach((v, i) => { if (!isFinite(v)) return; const x = xAt(i), y = yM(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
 
       paneTop += paneH + 10;
     }
 
-    // last price label
+    // last price line/pill
     const last = closes[closes.length - 1];
     const ly = yAt(last);
-    ctx.strokeStyle = 'rgba(255,215,0,.7)';
-    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = 'rgba(255,215,0,.7)'; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(pad.l, ly); ctx.lineTo(w - pad.r - 44, ly); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#ffd700';
-    ctx.fillRect(w - pad.r - 44, ly - 9, 44, 18);
-    ctx.fillStyle = '#000';
-    ctx.font = '12px system-ui';
-    ctx.fillText(last.toFixed(2), w - pad.r - 42, ly + 4);
+    ctx.fillStyle = '#ffd700'; ctx.fillRect(w - pad.r - 44, ly - 9, 44, 18);
+    ctx.fillStyle = '#000'; ctx.font = '12px system-ui';
+    ctx.fillText(fmt(last), w - pad.r - 42, ly + 4);
   }, [
-    containerSize, data, mode, showVolume,
-    emaFast, emaSlow, showBB, bbPeriod, bbK,
-    annotations, metrics, width, height, rsiPane, macdPane
+    containerSize, data, mode, showVolume, emaFast, emaSlow,
+    showBB, bbPeriod, bbK, annotations, metrics, width, height, rsiPane, macdPane
   ]);
 
-  // crosshair overlay
+  /* crosshair + tooltip overlay */
   useEffect(() => {
     const overlay = overlayRef.current;
     const base = baseRef.current;
-    const wrap = wrapRef.current;
-    if (!overlay || !base || !wrap) return;
+    if (!overlay || !base) return;
 
-    // size sync
     overlay.width = base.width;
     overlay.height = base.height;
 
     const ctx = overlay.getContext('2d')!;
-    const w = overlay.width;
-    const h = overlay.height;
+    const w = overlay.width, h = overlay.height;
 
     if (!data.length || !crosshair) {
       ctx.clearRect(0, 0, w, h);
       return;
     }
 
+    // panes + ranges (need for bounds & price mapping)
     const extraPaneCount = (rsiPane ? 1 : 0) + (macdPane ? 1 : 0);
     const paneH = 88;
     const extraH = extraPaneCount * (paneH + 10);
@@ -486,13 +424,77 @@ export default function MiniChartPro({
     const lows = data.map(d => d.l);
     const max = highs.length ? Math.max(...highs) : 1;
     const min = lows.length ? Math.min(...lows) : 0;
-
     const xAt = (i: number) => pad.l + (i * plotW) / Math.max(1, data.length - 1);
-    const idxAtX = (x: number) => {
-      const i = Math.round(((x - pad.l) / plotW) * (data.length - 1));
-      return Math.max(0, Math.min(data.length - 1, i));
-    };
+    const idxAtX = (x: number) => Math.max(0, Math.min(data.length - 1, Math.round(((x - pad.l) / plotW) * (data.length - 1))));
     const yAt = (px: number) => pad.t + ((max - px) * plotH) / (max - min + 1e-9);
+
+    const drawTooltip = (mx: number, my: number, i: number) => {
+      const c = data[i];
+      const lines: Array<[string, string, string?]> = [
+        ['Time', formatTime(c.t)],
+        ['Price', fmt(c.c)],
+        ['Open', fmt(c.o)], ['High', fmt(c.h)], ['Low', fmt(c.l)], ['Close', fmt(c.c)],
+        ['Volume', fmt(c.v, 2)]
+      ];
+
+      // EMAs
+      if (isFinite(metrics.emaF[i])) lines.push(['EMA Fast', fmt(metrics.emaF[i])]);
+      if (isFinite(metrics.emaS[i])) lines.push(['EMA Slow', fmt(metrics.emaS[i])]);
+
+      // Bollinger
+      if (metrics.bb) {
+        const u = metrics.bb.upper[i], m = metrics.bb.middle[i], l = metrics.bb.lower[i];
+        if (isFinite(u) || isFinite(m) || isFinite(l)) {
+          lines.push(['BB Upper', fmt(u)]);
+          lines.push(['BB Mid', fmt(m)]);
+          lines.push(['BB Lower', fmt(l)]);
+        }
+      }
+
+      // RSI
+      if (metrics.rsiArr && isFinite(metrics.rsiArr[i])) {
+        lines.push(['RSI', fmt(metrics.rsiArr[i], 2)]);
+      }
+
+      // MACD
+      if (metrics.macdObj) {
+        const macd = metrics.macdObj.macdLine[i];
+        const sig = metrics.macdObj.signalLine[i];
+        const hist = metrics.macdObj.hist[i];
+        if (isFinite(macd) || isFinite(sig) || isFinite(hist)) {
+          lines.push(['MACD', fmt(macd, 4)]);
+          lines.push(['Signal', fmt(sig, 4)]);
+          lines.push(['Hist', fmt(hist, 4)]);
+        }
+      }
+
+      // measure
+      ctx.font = '12px system-ui';
+      const labelW = Math.max(...lines.map(([k]) => ctx.measureText(k).width)) + 8;
+      const valueW = Math.max(...lines.map(([, v]) => ctx.measureText(v).width)) + 8;
+      const boxW = Math.max(160, labelW + valueW + 12);
+      const boxH = lines.length * 18 + 10;
+
+      // position (keep inside)
+      let x = mx + 12, y = my + 12;
+      if (x + boxW > w - 4) x = mx - boxW - 12;
+      if (y + boxH > h - 4) y = my - boxH - 12;
+      x = Math.max(4, Math.min(x, w - boxW - 4));
+      y = Math.max(4, Math.min(y, h - boxH - 4));
+
+      // draw
+      ctx.fillStyle = 'rgba(12,18,24,.95)'; ctx.strokeStyle = 'rgba(212,175,55,.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.rect(x, y, boxW, boxH); ctx.fill(); ctx.stroke();
+
+      // rows
+      let yy = y + 8;
+      lines.forEach(([k, v]) => {
+        ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillText(k, x + 8, yy + 10);
+        ctx.fillStyle = '#ffd700'; ctx.fillText(v, x + 8 + labelW, yy + 10);
+        yy += 18;
+      });
+    };
 
     const onMove = (e: MouseEvent) => {
       const rect = overlay.getBoundingClientRect();
@@ -501,16 +503,14 @@ export default function MiniChartPro({
 
       ctx.clearRect(0, 0, w, h);
 
-      // bounds
       if (mx < pad.l || mx > w - pad.r || my < pad.t || my > h - pad.b) return;
 
-      // nearest index
       const i = idxAtX(mx);
       const c = data[i];
       const x = xAt(i);
       const y = yAt(c.c);
 
-      // crosshair lines
+      // crosshair
       ctx.strokeStyle = 'rgba(255,255,255,.2)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
@@ -518,25 +518,27 @@ export default function MiniChartPro({
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke();
       ctx.setLineDash([]);
 
-      // y price pill
+      // price pill
       ctx.fillStyle = '#ffd700';
-      const priceText = c.c.toFixed(5).replace(/0+$/, '').replace(/\.$/, '');
+      const priceText = fmt(c.c);
       const pw = Math.max(44, ctx.measureText(priceText).width + 10);
       ctx.fillRect(w - pad.r - pw, y - 9, pw, 18);
       ctx.fillStyle = '#000';
-      ctx.font = '12px system-ui';
       ctx.fillText(priceText, w - pad.r - pw + 6, y + 4);
 
-      // x time pill
+      // time pill
       const timeText = formatTime(c.t);
       const tw = Math.max(40, ctx.measureText(timeText).width + 10);
       ctx.fillStyle = '#ffd700';
       ctx.fillRect(x - tw / 2, h - pad.b + 6, tw, 18);
       ctx.fillStyle = '#000';
       ctx.fillText(timeText, x - tw / 2 + 6, h - pad.b + 18 - 9 + 4);
+
+      // tooltip with indicators
+      drawTooltip(mx, my, i);
     };
 
-    const onLeave = () => { ctx.clearRect(0, 0, w, h); };
+    const onLeave = () => ctx.clearRect(0, 0, w, h);
 
     overlay.addEventListener('mousemove', onMove);
     overlay.addEventListener('mouseleave', onLeave);
@@ -544,7 +546,7 @@ export default function MiniChartPro({
       overlay.removeEventListener('mousemove', onMove);
       overlay.removeEventListener('mouseleave', onLeave);
     };
-  }, [data, crosshair, containerSize, showVolume, rsiPane, macdPane]);
+  }, [data, crosshair, containerSize, showVolume, rsiPane, macdPane, metrics]);
 
   return (
     <div>
