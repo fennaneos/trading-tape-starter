@@ -95,3 +95,217 @@ body{
   .grid{grid-template-columns:1fr}
   .controls{flex-direction:column; align-items:stretch}
 }
+/* ---------- HelpTip “?” dot + card ---------- */
+/* ---------- Gold Lux theme helpers ---------- */
+.gb-btn {
+  border-radius: 10px;
+  padding: 8px 12px;
+  border: 1px solid rgba(212,175,55,.35);
+  background: transparent;
+  color: #e7e7e7;
+  cursor: pointer;
+}
+.gb-btn:active { transform: translateY(1px); }
+
+.gb-btn.gb-solid {
+  background: linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.10));
+  border-color: rgba(212,175,55,.55);
+}
+.gb-btn.gb-outline { background: transparent; }
+.gb-btn.gb-ghost   { border-color: rgba(255,99,132,.35); color: #ff6b6b; }
+
+.badge {
+  font-size: 12px; line-height: 1; padding: 4px 8px; border-radius: 8px;
+  border: 1px solid rgba(212,175,55,0.4);
+  background: rgba(212,175,55,0.15);
+  color: #ffd700;
+}
+
+/* ---------- HelpTip “?” dot + card ---------- */
+.help-dot {
+  width: 22px; height: 22px; line-height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(212,175,55,.45);
+  background: rgba(212,175,55,.10);
+  color: #ffd700;
+  font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 6px;
+}
+.help-dot--compact { width: 18px; height: 18px; font-size: 12px; margin-left: 4px; }
+
+.help-card {
+  position: absolute;
+  min-width: 220px; max-width: 320px;
+  z-index: 50;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(212,175,55,.35);
+  background: rgba(0,0,0,.85);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 28px rgba(0,0,0,.4);
+}
+.help-right  { top: 50%; left: calc(100% + 8px); transform: translateY(-50%); }
+.help-left   { top: 50%; right: calc(100% + 8px); transform: translateY(-50%); }
+.help-top    { left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); }
+.help-bottom { left: 50%; top: calc(100% + 8px); transform: translateX(-50%); }
+
+.help-card__title { color:#ffd700; font-weight:700; margin-bottom:6px; }
+.help-card__body  { color:#cfcfcf; font-size: 13px; }
+.help-card__actions { margin-top:8px; display:flex; justify-content:flex-end; }
+
+/* ---------- Mobile layout tweaks ---------- */
+@media (max-width: 980px){
+  .grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  .controls { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .controls select, .controls .num, .controls input[type="number"] { width: 100% !important; }
+  .panel { border-radius: 16px; }
+  .panelHeader { font-size: 16px; }
+}
+
+/* tiny phones */
+@media (max-width: 420px){
+  .controls { grid-template-columns: 1fr; }
+  .help-card { max-width: 280px; }
+}
+
+
+/* Panels keep your gold look (already present in your project).
+   Add only responsive & control-row helpers. */
+.controls{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.controls-row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.input, select, .num{
+  border-radius:8px; border:1px solid rgba(255,255,255,.2);
+  background:rgba(0,0,0,.2); color:#e7e7e7; padding:6px 8px;
+}
+.toggle{ display:inline-flex; align-items:center; gap:6px }
+
+/* desktop grid already exists; collapse on mobile */
+@media (max-width: 900px){
+  .grid{ display:block !important }
+  .panel{ margin-bottom:12px }
+  .hide-mobile{ display:none !important }
+}
+
+/* badges & buttons are your golden set; ensure .badge exists */
+.badge{
+  font-size:12px; line-height:1; padding:4px 8px; border-radius:8px;
+  border:1px solid rgba(212,175,55,.4); background:rgba(212,175,55,.15); color:#ffd700;
+}
+
+/* (Optional) lift FAB above tabs if your FAB uses position:fixed; use inline style in code too */
+
+
+.quote-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;              /* 🔥 pointer cursor back */
+  user-select: none;
+}
+
+.quote-pill .sym { color: #ffd700; font-weight: 700; }
+.quote-pill .dot { opacity: .45; }
+.quote-pill .px  { color: #e7e7e7; }
+.quote-pill .chg { font-weight: 600; }
+
+.quote-pill .chg.up   { color: #22c55e; }   /* green */
+.quote-pill .chg.down { color: #ef4444; }   /* red   */
+.quote-pill .chg.flat { color: #9aa0a6; }
+
+/* --- layout polish --- */
+.topnav{
+  display:flex; gap:12px; align-items:center;
+  padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.08);
+  position:sticky; top:0; z-index:5; background:#0b0f14;
+}
+.brand{ font-weight:800; color:#ffd700; }
+.nav-links{ display:flex; gap:10px; }
+
+.page{ padding:12px; }
+.page.charts{ padding-bottom:92px; } /* leave room for quickbar + tabs */
+
+.dash-grid{
+  display:grid;
+  grid-template-columns: 280px 1fr 360px;
+  gap:12px; align-items:start;
+}
+
+/* Right column wrapper to keep upgrade card stacked on desktop */
+.right-col{ display:flex; flex-direction:column; gap:12px; }
+
+.panel{
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(212,175,55,0.25);
+  border-radius: 12px;
+  padding: 12px;
+}
+.panelHeader{ color:#d4af37; font-weight:700; margin-bottom:8px; }
+
+.controls{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
+.controls-row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.label{ opacity:.8; }
+
+.input, select, .num{
+  border-radius:8px; border:1px solid rgba(255,255,255,0.2);
+  background:rgba(0,0,0,0.2); color:#e7e7e7; padding:6px 8px;
+}
+.num{ width:70px; }
+.toggle{ display:inline-flex; align-items:center; gap:6px; }
+
+.badge{
+  font-size:12px; line-height:1; padding:4px 8px; border-radius:8px;
+  border:1px solid rgba(212,175,55,0.4); background:rgba(212,175,55,0.15); color:#ffd700;
+}
+
+.gb-btn{ cursor:pointer; }
+.gb-outline{ border:1px solid rgba(212,175,55,.25); background:transparent; color:#e7e7e7; padding:6px 10px; border-radius:8px; }
+.gb-ghost{ border:1px solid rgba(255,99,132,.3); background:transparent; color:#ff6b6b; padding:4px 8px; border-radius:8px; }
+.gb-solid{ border:1px solid rgba(212,175,55,.4); background:rgba(212,175,55,.1); color:#e7e7e7; padding:8px 12px; border-radius:8px; }
+
+.sep{ border:none; border-top:1px solid rgba(255,255,255,0.08); margin:10px 0; }
+
+/* --- Crosshair & pointer events on chart --- */
+.chart-root canvas,
+.chart-root svg{ cursor: crosshair; pointer-events:auto; }
+
+/* --- Mobile layout --- */
+@media (max-width: 920px){
+  .hide-mobile{ display:none !important; }
+  .show-mobile{ display:block !important; }
+
+  .dash-grid{
+    grid-template-columns: 1fr;
+  }
+  .right-col{ order:3; } /* Watchlist -> Chart -> Right col */
+  .panel{ padding:10px; }
+  .controls-row select, .controls-row .num, .controls-row .input{
+    min-height:40px;
+  }
+}
+
+/* sticky quickbar (mobile only) */
+.quickbar{
+  position: fixed;
+  left: 12px; right: 12px; bottom: 72px; /* above bottom tabs */
+  display: none;
+  gap: 8px;
+  background: rgba(0,0,0,.5);
+  border: 1px solid rgba(212,175,55,.25);
+  border-radius: 12px;
+  padding: 8px;
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+.quickbar select{
+  flex:1; min-height:44px; font-size:14px;
+}
+.show-mobile{ display:none; }

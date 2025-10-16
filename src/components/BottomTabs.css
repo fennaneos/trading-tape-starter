@@ -1,0 +1,21 @@
+.btabs{
+  position:fixed; left:0; right:0; bottom:0; height:58px;
+  display:flex; background:rgba(15,20,27,.98);
+  border-top:1px solid rgba(212,175,55,.25);
+  z-index:900;
+}
+.btab{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px; color:#e7e7e7; text-decoration:none; position:relative;
+}
+.btab-ic{ font-size:18px; }
+.btab.active{ color:#ffd700; }
+.btab-badge{
+  position:absolute; top:6px; right:20%;
+  font-size:10px; line-height:1;
+  padding:2px 6px; border-radius:999px;
+  color:#0f141b; background:#ffd700; font-weight:800;
+}
+@media (min-width: 901px){
+  .btabs{ display:none; }
+}

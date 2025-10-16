@@ -1,0 +1,13 @@
+.pw-backdrop{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:flex; align-items:center; justify-content:center; z-index:1000;
+}
+.pw-card{
+  width:min(92vw,520px); background:#0f141b; color:#e7e7e7;
+  border:1px solid rgba(212,175,55,.35); border-radius:16px;
+  padding:18px; box-shadow:0 10px 40px rgba(0,0,0,.5);
+}
+.pw-title{ color:#ffd700; font-weight:800; font-size:18px; margin-bottom:8px; }
+.pw-list{ margin:8px 0 14px; padding-left:18px; }
+.pw-row{ display:flex; gap:8px; justify-content:flex-end; }
+.pw-note{ opacity:.65; font-size:12px; margin-top:8px; }

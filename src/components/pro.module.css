@@ -1,0 +1,64 @@
+.panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.panelHeader {
+  color: #d4af37;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.panelBody {
+  color: #e7e7e7;
+}
+
+/* Gold button (solid) */
+.gb-btn {
+  font-family: inherit;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.gb-solid {
+  background: linear-gradient(145deg, #ffd700, #c9a100);
+  color: #0f141b;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+.gb-solid:hover {
+  background: linear-gradient(145deg, #ffe44d, #d4af37);
+}
+
+/* Outline version */
+.gb-outline {
+  background: transparent;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: #ffd700;
+}
+.gb-outline:hover {
+  background: rgba(212, 175, 55, 0.15);
+}
+
+/* List styling */
+.panelBody ul {
+  margin-top: 10px;
+  padding-left: 18px;
+  line-height: 1.4;
+  color: #e7e7e7;
+}
+.panelBody li::marker {
+  color: #ffd700;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .panel {
+    border-radius: 0;
+    padding: 16px;
+  }
+}
