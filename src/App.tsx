@@ -14,6 +14,12 @@ import { PlanProvider, usePlan } from './state/PlanContext';
 import FAB from './components/FAB';
 import BacktestPanel from './components/BacktestPanel';
 
+import TradeModal from "./components/TradeModal";
+
+// imports at top
+import TradePanel from "./components/TradePanel";
+
+
 const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:4000';
 type WItem = { symbol: string; name?: string };
 
@@ -24,6 +30,7 @@ export default function App() {
         <TopNav />
         <Routes>
           <Route path="/" element={<Dashboard apiBase={API_BASE} />} />
+          <Route path="/trade" element={<div className="page" style={{padding:12, paddingBottom:72}}><TradePanel defaultSymbol="AAPL" /></div>} />
           <Route path="/ai" element={<AiPage apiBase={API_BASE} />} />
           <Route path="/portfolio" element={<Portfolio />} />
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -64,6 +71,7 @@ function TopNav() {
       </div>
       <div style={{ flex: 1 }} />
       <div className="nav-links hide-mobile" style={{ display: 'flex', gap: 10 }}>
+        <Link to="/trade" className="gb-btn gb-outline">Trade</Link>
         <Link to="/" className="gb-btn gb-outline">
           Charts
         </Link>
@@ -85,6 +93,8 @@ function TopNav() {
    Dashboard (Charts)
    ====================== */
 function Dashboard({ apiBase }: { apiBase: string }) {
+  const [tradeOpen, setTradeOpen] = useState(false);
+
   const [list, setList] = useState<WItem[]>([]);
   const [symbol, setSymbol] = useState<string>('EURUSD');
   const [tf, setTf] = useState<'1m' | '5m' | '15m' | '1h' | '4h' | '1d'>('1m');
@@ -450,8 +460,9 @@ function Dashboard({ apiBase }: { apiBase: string }) {
       <FAB
         apiBase={API_BASE}
         defaultSymbol={symbol}
-        onAddSymbol={(s) => onAdd(s)}
-        style={{ bottom: 72 + 14 }} // 72px tab bar height + spacing
+        onAddSymbol={(s)=>onAdd(s)}
+        onOrder={()=> setTradeOpen(true)}   // <— open modal
+        style={{ bottom: 72+14 }}           // if you keep your mobile tabs
       />
 
       {/* Paywall */}
@@ -467,6 +478,15 @@ function Dashboard({ apiBase }: { apiBase: string }) {
             }
           } catch {}
           setPaywallOpen(false);
+        }}
+      />
+
+      <TradeModal
+        open={tradeOpen}
+        onClose={()=> setTradeOpen(false)}
+        symbol={symbol}
+        onPlaced={()=> {
+          // optional: refresh positions/orders panel somewhere, or toast
         }}
       />
     </>
