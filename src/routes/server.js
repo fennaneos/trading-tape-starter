@@ -13,6 +13,11 @@ app.use(express.json());
 app.use('/api/billing', billingRoute);
 app.use('/api/user', userRoute);
 
+// server/index.js  (or wherever you configure routes)
+import strategyRoute from './routes/strategy.js';
+app.use('/api/strategy', strategyRoute);
+
+
 // base route (optional)
 app.get('/', (req, res) => {
   res.send('✅ Trading Core backend running');
@@ -21,3 +26,4 @@ app.get('/', (req, res) => {
 // start server
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 Server ready on http://localhost:${PORT}`));
+

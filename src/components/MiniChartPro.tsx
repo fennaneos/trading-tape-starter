@@ -1,7 +1,6 @@
 // src/components/MiniChartPro.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-/* ---------- types ---------- */
 type Candle = { t: number; o: number; h: number; l: number; c: number; v: number };
 type ChartMode = 'candles' | 'line' | 'both';
 
@@ -140,6 +139,10 @@ export default function MiniChartPro({
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: width, h: height });
 
+  // mobile crosshair lock / long-press
+  const lockRef = useRef<{ locked: boolean; i: number | null }>({ locked: false, i: null });
+  const touchTimer = useRef<number | null>(null);
+
   const API_BASE = (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:4000';
 
   /* fetch candles */
@@ -187,7 +190,6 @@ export default function MiniChartPro({
 
     const emaF = ema(closes, Math.max(2, emaFast | 0));
     const emaS = ema(closes, Math.max(2, emaSlow | 0));
-
     const bb = showBB ? bollinger(closes, Math.max(2, bbPeriod | 0), bbK) : null;
     const rsiArr = rsiPane ? rsi(closes, Math.max(2, rsiPeriod | 0)) : null;
     const macdObj = macdPane ? macd(closes, 12, 26, 9) : null;
@@ -209,7 +211,6 @@ export default function MiniChartPro({
 
     if (!data.length) return;
 
-    // panes layout
     const extraPaneCount = (rsiPane ? 1 : 0) + (macdPane ? 1 : 0);
     const paneH = 88;
     const extraH = extraPaneCount * (paneH + 10);
@@ -271,28 +272,19 @@ export default function MiniChartPro({
     if (mode !== 'candles') {
       ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
       ctx.beginPath();
-      closes.forEach((c, i) => {
-        const x = xAt(i), y = yAt(c);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
+      closes.forEach((c, i) => { const x = xAt(i), y = yAt(c); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
     }
 
     // EMAs
     ctx.strokeStyle = '#4dc9ff'; ctx.lineWidth = 1.2;
     ctx.beginPath();
-    emaF.forEach((c, i) => {
-      const x = xAt(i), y = yAt(c);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
+    emaF.forEach((c, i) => { const x = xAt(i), y = yAt(c); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
     ctx.stroke();
 
     ctx.strokeStyle = '#ffa14d';
     ctx.beginPath();
-    emaS.forEach((c, i) => {
-      const x = xAt(i), y = yAt(c);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
+    emaS.forEach((c, i) => { const x = xAt(i), y = yAt(c); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
     ctx.stroke();
 
     // BB lines
@@ -332,12 +324,8 @@ export default function MiniChartPro({
     // RSI pane
     let paneTop = h - (extraPaneCount * (paneH + 10)) + 10;
     if (rsiPane && metrics.rsiArr) {
-      const yR = (val: number) => {
-        const top = paneTop;
-        return top + ((100 - val) * (paneH / 100));
-      };
-      ctx.strokeStyle = 'rgba(255,255,255,.08)';
-      ctx.strokeRect(pad.l, paneTop, plotW, paneH);
+      const yR = (val: number) => paneTop + ((100 - val) * (paneH / 100));
+      ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.strokeRect(pad.l, paneTop, plotW, paneH);
       ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,255,255,.15)';
       [30, 50, 70].forEach(level => { const y = yR(level); ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(w - pad.r, y); ctx.stroke(); });
       ctx.setLineDash([]);
@@ -377,8 +365,6 @@ export default function MiniChartPro({
       ctx.beginPath();
       macdObj.signalLine.forEach((v, i) => { if (!isFinite(v)) return; const x = xAt(i), y = yM(v); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke();
-
-      paneTop += paneH + 10;
     }
 
     // last price line/pill
@@ -395,7 +381,7 @@ export default function MiniChartPro({
     showBB, bbPeriod, bbK, annotations, metrics, width, height, rsiPane, macdPane
   ]);
 
-  /* crosshair + tooltip overlay */
+  /* crosshair + tooltip overlay (mouse + touch) */
   useEffect(() => {
     const overlay = overlayRef.current;
     const base = baseRef.current;
@@ -412,7 +398,7 @@ export default function MiniChartPro({
       return;
     }
 
-    // panes + ranges (need for bounds & price mapping)
+    // panes + bounds
     const extraPaneCount = (rsiPane ? 1 : 0) + (macdPane ? 1 : 0);
     const paneH = 88;
     const extraH = extraPaneCount * (paneH + 10);
@@ -424,70 +410,53 @@ export default function MiniChartPro({
     const lows = data.map(d => d.l);
     const max = highs.length ? Math.max(...highs) : 1;
     const min = lows.length ? Math.min(...lows) : 0;
+
     const xAt = (i: number) => pad.l + (i * plotW) / Math.max(1, data.length - 1);
     const idxAtX = (x: number) => Math.max(0, Math.min(data.length - 1, Math.round(((x - pad.l) / plotW) * (data.length - 1))));
     const yAt = (px: number) => pad.t + ((max - px) * plotH) / (max - min + 1e-9);
 
     const drawTooltip = (mx: number, my: number, i: number) => {
       const c = data[i];
-      const lines: Array<[string, string, string?]> = [
+      const lines: Array<[string, string]> = [
         ['Time', formatTime(c.t)],
         ['Price', fmt(c.c)],
         ['Open', fmt(c.o)], ['High', fmt(c.h)], ['Low', fmt(c.l)], ['Close', fmt(c.c)],
         ['Volume', fmt(c.v, 2)]
       ];
-
-      // EMAs
       if (isFinite(metrics.emaF[i])) lines.push(['EMA Fast', fmt(metrics.emaF[i])]);
       if (isFinite(metrics.emaS[i])) lines.push(['EMA Slow', fmt(metrics.emaS[i])]);
-
-      // Bollinger
       if (metrics.bb) {
         const u = metrics.bb.upper[i], m = metrics.bb.middle[i], l = metrics.bb.lower[i];
-        if (isFinite(u) || isFinite(m) || isFinite(l)) {
-          lines.push(['BB Upper', fmt(u)]);
-          lines.push(['BB Mid', fmt(m)]);
-          lines.push(['BB Lower', fmt(l)]);
-        }
+        if (isFinite(u)) lines.push(['BB Upper', fmt(u)]);
+        if (isFinite(m)) lines.push(['BB Mid', fmt(m)]);
+        if (isFinite(l)) lines.push(['BB Lower', fmt(l)]);
       }
-
-      // RSI
-      if (metrics.rsiArr && isFinite(metrics.rsiArr[i])) {
-        lines.push(['RSI', fmt(metrics.rsiArr[i], 2)]);
-      }
-
-      // MACD
+      if (metrics.rsiArr && isFinite(metrics.rsiArr[i])) lines.push(['RSI', fmt(metrics.rsiArr[i], 2)]);
       if (metrics.macdObj) {
         const macd = metrics.macdObj.macdLine[i];
         const sig = metrics.macdObj.signalLine[i];
         const hist = metrics.macdObj.hist[i];
-        if (isFinite(macd) || isFinite(sig) || isFinite(hist)) {
-          lines.push(['MACD', fmt(macd, 4)]);
-          lines.push(['Signal', fmt(sig, 4)]);
-          lines.push(['Hist', fmt(hist, 4)]);
-        }
+        if (isFinite(macd)) lines.push(['MACD', fmt(macd, 4)]);
+        if (isFinite(sig)) lines.push(['Signal', fmt(sig, 4)]);
+        if (isFinite(hist)) lines.push(['Hist', fmt(hist, 4)]);
       }
 
-      // measure
       ctx.font = '12px system-ui';
       const labelW = Math.max(...lines.map(([k]) => ctx.measureText(k).width)) + 8;
       const valueW = Math.max(...lines.map(([, v]) => ctx.measureText(v).width)) + 8;
       const boxW = Math.max(160, labelW + valueW + 12);
       const boxH = lines.length * 18 + 10;
 
-      // position (keep inside)
       let x = mx + 12, y = my + 12;
       if (x + boxW > w - 4) x = mx - boxW - 12;
       if (y + boxH > h - 4) y = my - boxH - 12;
       x = Math.max(4, Math.min(x, w - boxW - 4));
       y = Math.max(4, Math.min(y, h - boxH - 4));
 
-      // draw
       ctx.fillStyle = 'rgba(12,18,24,.95)'; ctx.strokeStyle = 'rgba(212,175,55,.4)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.rect(x, y, boxW, boxH); ctx.fill(); ctx.stroke();
 
-      // rows
       let yy = y + 8;
       lines.forEach(([k, v]) => {
         ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillText(k, x + 8, yy + 10);
@@ -496,19 +465,12 @@ export default function MiniChartPro({
       });
     };
 
-    const onMove = (e: MouseEvent) => {
-      const rect = overlay.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-
-      ctx.clearRect(0, 0, w, h);
-
-      if (mx < pad.l || mx > w - pad.r || my < pad.t || my > h - pad.b) return;
-
-      const i = idxAtX(mx);
+    const drawAtIndex = (i: number, mx: number, my: number) => {
       const c = data[i];
       const x = xAt(i);
       const y = yAt(c.c);
+
+      ctx.clearRect(0, 0, w, h);
 
       // crosshair
       ctx.strokeStyle = 'rgba(255,255,255,.2)';
@@ -534,17 +496,112 @@ export default function MiniChartPro({
       ctx.fillStyle = '#000';
       ctx.fillText(timeText, x - tw / 2 + 6, h - pad.b + 18 - 9 + 4);
 
-      // tooltip with indicators
       drawTooltip(mx, my, i);
+      lockRef.current.i = i;
     };
 
-    const onLeave = () => ctx.clearRect(0, 0, w, h);
+    const clearOverlay = () => ctx.clearRect(0, 0, w, h);
+
+    /* ---- mouse ---- */
+    const onMove = (e: MouseEvent) => {
+      if (lockRef.current.locked) {
+        // follow x when locked and dragging with mouse button
+        if (e.buttons !== 1) return;
+      }
+      const rect = overlay.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      if (mx < pad.l || mx > w - pad.r || my < pad.t || my > h - pad.b) { if (!lockRef.current.locked) clearOverlay(); return; }
+      const i = idxAtX(mx);
+      drawAtIndex(i, mx, my);
+    };
+    const onLeave = () => { if (!lockRef.current.locked) clearOverlay(); };
+    const onClick = (e: MouseEvent) => {
+      // toggle lock on click
+      const rect = overlay.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const i = idxAtX(mx);
+      lockRef.current.locked = !lockRef.current.locked;
+      if (lockRef.current.locked) drawAtIndex(i, mx, my);
+      else clearOverlay();
+    };
+
+    /* ---- touch (mobile) ---- */
+    const longPressMs = 300;
+
+    const touchPos = (ev: TouchEvent) => {
+      const t = ev.touches[0] || ev.changedTouches[0];
+      const rect = overlay.getBoundingClientRect();
+      return { mx: t.clientX - rect.left, my: t.clientY - rect.top };
+    };
+
+    const touchstart = (ev: TouchEvent) => {
+      ev.preventDefault();
+      if (touchTimer.current) window.clearTimeout(touchTimer.current);
+      // long-press: show but not lock
+      touchTimer.current = window.setTimeout(() => {
+        if (!ev.touches.length) return;
+        const { mx, my } = touchPos(ev);
+        const i = idxAtX(mx);
+        drawAtIndex(i, mx, my);
+        lockRef.current.locked = false;
+      }, longPressMs);
+    };
+    const touchmove = (ev: TouchEvent) => {
+      ev.preventDefault();
+      if (!ev.touches.length) return;
+      const { mx, my } = touchPos(ev);
+      const i = idxAtX(mx);
+      // if locked, follow finger; if long-press fired (overlay visible), also follow
+      if (lockRef.current.locked || overlayHasPixels()) drawAtIndex(i, mx, my);
+    };
+    const touchend = (ev: TouchEvent) => {
+      ev.preventDefault();
+      if (touchTimer.current) { window.clearTimeout(touchTimer.current); touchTimer.current = null; }
+
+      // single tap: toggle lock
+      if (ev.changedTouches && ev.changedTouches.length === 1) {
+        const { mx, my } = touchPos(ev as any);
+        const i = idxAtX(mx);
+        // If overlay is basically empty -> this was a tap: toggle lock on
+        if (!overlayHasPixels()) {
+          lockRef.current.locked = true;
+          drawAtIndex(i, mx, my);
+          return;
+        }
+      }
+      // if not locked, clear after long-press release
+      if (!lockRef.current.locked) clearOverlay();
+    };
+
+    const overlayHasPixels = () => {
+      // lightweight check: read 1px alpha in the center of overlay
+      const p = ctx.getImageData(Math.floor(w / 2), Math.floor(h / 2), 1, 1).data;
+      return p[3] !== 0;
+    };
+
+    // set proper touch-action to avoid page scroll while interacting
+    (overlay.style as any).touchAction = 'none';
 
     overlay.addEventListener('mousemove', onMove);
     overlay.addEventListener('mouseleave', onLeave);
+    overlay.addEventListener('click', onClick);
+
+    overlay.addEventListener('touchstart', touchstart, { passive: false });
+    overlay.addEventListener('touchmove', touchmove, { passive: false });
+    overlay.addEventListener('touchend', touchend, { passive: false });
+    overlay.addEventListener('touchcancel', touchend, { passive: false });
+
     return () => {
       overlay.removeEventListener('mousemove', onMove);
       overlay.removeEventListener('mouseleave', onLeave);
+      overlay.removeEventListener('click', onClick);
+
+      overlay.removeEventListener('touchstart', touchstart as any);
+      overlay.removeEventListener('touchmove', touchmove as any);
+      overlay.removeEventListener('touchend', touchend as any);
+      overlay.removeEventListener('touchcancel', touchend as any);
     };
   }, [data, crosshair, containerSize, showVolume, rsiPane, macdPane, metrics]);
 
@@ -553,7 +610,6 @@ export default function MiniChartPro({
       <div style={{ marginBottom: 6, fontWeight: 700 }}>
         {symbol} - {tf} - {mode}{showVolume ? ' + vol' : ''}
       </div>
-
       <div
         ref={wrapRef}
         className="chart-root"
@@ -562,7 +618,7 @@ export default function MiniChartPro({
         <canvas ref={baseRef} style={{ position: 'absolute', inset: 0 }} />
         <canvas
           ref={overlayRef}
-          style={{ position: 'absolute', inset: 0, cursor: crosshair ? 'crosshair' : 'default' }}
+          style={{ position: 'absolute', inset: 0, cursor: crosshair ? 'crosshair' : 'default', touchAction: 'none' as any }}
         />
       </div>
     </div>
